@@ -137,13 +137,17 @@ namespace gazebo
     };
     GZ_REGISTER_MODEL_PLUGIN(rok3_plugin);
 }
+void Practice()
+{
+    std::cout << "Hello World!" << std::endl;
+}
 
 void gazebo::rok3_plugin::Load(physics::ModelPtr _model, sdf::ElementPtr /*_sdf*/)
 {
     /*
      * Loading model data and initializing the system before simulation 
      */
-
+    Practice();
     //* model.sdf file based model data input to [physics::ModelPtr model] for gazebo simulation
     model = _model;
 
