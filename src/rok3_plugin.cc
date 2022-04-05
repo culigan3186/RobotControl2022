@@ -137,17 +137,17 @@ namespace gazebo
     };
     GZ_REGISTER_MODEL_PLUGIN(rok3_plugin);
 }
-void Practice()
-{
-    std::cout << "Hello World!" << std::endl;
-}
+//void Practice()
+//{
+//    std::cout << "Hello World!" << std::endl;
+//}
 
 void gazebo::rok3_plugin::Load(physics::ModelPtr _model, sdf::ElementPtr /*_sdf*/)
 {
     /*
      * Loading model data and initializing the system before simulation 
      */
-    Practice();
+    //Practice();
     //* model.sdf file based model data input to [physics::ModelPtr model] for gazebo simulation
     model = _model;
 
@@ -163,7 +163,7 @@ void gazebo::rok3_plugin::Load(physics::ModelPtr _model, sdf::ElementPtr /*_sdf*
 
     //* model.urdf file based model data input to [Model* rok3_model] for using RBDL
     Model* rok3_model = new Model();
-    Addons::URDFReadFromFile("/home/minho/.gazebo/models/rok3_model/urdf/rok3_model.urdf", rok3_model, true, true);
+    Addons::URDFReadFromFile("/home/culigan3186/.gazebo/models/rok3_model/urdf/rok3_model.urdf", rok3_model, true, true);
     //↑↑↑ Check File Path ↑↑↑
     nDoF = rok3_model->dof_count - 6; // Get degrees of freedom, except position and orientation of the robot
     joint = new ROBO_JOINT[nDoF]; // Generation joint variables struct
