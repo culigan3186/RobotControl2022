@@ -137,17 +137,161 @@ namespace gazebo
     };
     GZ_REGISTER_MODEL_PLUGIN(rok3_plugin);
 }
-//void Practice()
-//{
-//    std::cout << "Hello World!" << std::endl;
-//}
+
+MatrixXd getTransformI0(){
+    
+    MatrixXd tmp_m(4,4);
+    
+    //* 1
+    tmp_m = MatrixXd::Identity(4,4);
+    
+    //* 2 
+//    tmp_m << 1, 0, 0, 0, \
+//             0, 1, 0, 0, \
+//             0, 0, 1, 0, \
+//             0, 0, 0, 1;
+    
+    return tmp_m;
+}
+
+MatrixXd getTransform3E(){
+    MatrixXd tmp_m(4,4);
+    tmp_m = MatrixXd::Identity(4,4);
+    tmp_m  << 1, 0, 0, 0, \
+              0, 1, 0, 0, \
+              0, 0, 1, 1, \
+              0, 0, 0, 1;
+
+    return tmp_m;
+}
+
+MatrixXd jointToTransform01(VectorXd q){
+    // q: generalize coordinates, q = [q1,q2,q3]
+    
+    MatrixXd tmp_m(4,4);
+    double qq = q(0);
+    tmp_m << cos(qq), 0 , sin(qq), 0, \
+             0, 1 , 0, 0, \
+             -sin(qq), 0 , cos(qq), 1, \
+             0, 0 , 0, 1;
+    return tmp_m;
+}
+
+MatrixXd jointToTransform12(VectorXd q){
+    // q: generalize coordinates, q = [q1,q2,q3]
+    
+    MatrixXd tmp_m(4,4);
+    double qq = q(0);
+    tmp_m << cos(qq), 0 , sin(qq), 0, \
+             0, 1 , 0, 0, \
+             -sin(qq), 0 , cos(qq), 1, \
+             0, 0 , 0, 1;
+    return tmp_m;
+}
+
+MatrixXd jointToTransform23(VectorXd q){
+    // q: generalize coordinates, q = [q1,q2,q3]
+    
+    MatrixXd tmp_m(4,4);
+    double qq = q(0);
+    tmp_m << cos(qq), 0 , sin(qq), 0, \
+             0, 1 , 0, 0, \
+             -sin(qq), 0 , cos(qq), 1, \
+             0, 0 , 0, 1;
+    return tmp_m;
+}
+    
+VectorXd jointToPosition(VectorXd q)
+{
+    VectorXd tmp_v = VectorXd::Zero(3);
+    MatrixXd T_IE(4,4);
+    
+    
+    T_IE = getTransformI0()*
+            jointToTransform01(q)*
+            jointToTransform12(q)*
+            jointToTransform23(q)*
+            getTransform3E();
+    
+    // Block operation manual:   http://eigen.tuxfamily.org/dox/group__TutorialBlockOperations.html
+    tmp_v = T_IE.block(0,3,3,1); // starting at (0,3), block size (3,1)
+    
+    return tmp_v;
+}
+
+
+MatrixXd jointToRotMat(VectorXd q)
+{
+    MatrixXd tmp_m = VectorXd::Zero(3);
+    MatrixXd T_IE(4,4);
+    
+    
+    T_IE = getTransformI0()*
+            jointToTransform01(q)*
+            jointToTransform12(q)*
+            jointToTransform23(q)*
+            getTransform3E();
+    
+    tmp_m = T_IE.block(0, 0, 3, 3);
+    
+    return tmp_m;
+}
+
+VectorXd rotToEuler(MatrixXd rotMat)
+{
+    // EulerZYX
+    
+    VectorXd eulerZYX(3);
+    double z,y,x;
+    z = atan2(rotMat(1,0), rotMat(0,0));
+    y = atan2( -rotMat(2,0), sqrt(pow(rotMat(2,1), 2.0) + pow(rotMat(2,2), 2.0)) );
+    x = atan2(rotMat(2,1), rotMat(2,2));
+    eulerZYX << z, y, x; 
+    std::cout << eulerZYX << endl;
+    
+    return eulerZYX;
+}
+
+void Practice()
+{
+    MatrixXd TI0(4,4), T01(4,4), T12(4,4), T23(4,4), T3E(4,4), TIE(4,4), CIE(3,3);
+    Vector3d q = {30, 30, 30};
+    Vector3d pos, euler;
+    q = q * PI/180; // Degree to Radian
+    
+    TI0 = getTransformI0();
+    T3E = getTransform3E();
+    T01 = jointToTransform01(q);
+    T12 = jointToTransform12(q);
+    T23 = jointToTransform23(q);
+    
+    
+    TIE = TI0*T01*T12*T23*T3E;
+    
+    pos = jointToPosition(q);
+    CIE = jointToRotMat(q);
+    euler = rotToEuler(CIE); // EulerZYX 
+    
+    std::cout << "Hello World!" << std::endl;
+    std::cout <<"TIE = \n" << TIE << std::endl;
+    
+    std::cout <<"Position = " << pos << std::endl;
+    std::cout <<"CIE = " << CIE << std::endl;
+    std::cout <<"Euler= " << euler << std::endl;
+    
+//    std::cout << "TI0 = \n" << TI0 << std::endl;
+//    std::cout << "T01 = \n" << T01 << std::endl;
+//    std::cout << "T12 = \n" << T12 << std::endl;
+//    std::cout << "T23 = \n" << T23 << std::endl;
+//    std::cout << "T3E = \n" << T3E << std::endl;
+}
+
 
 void gazebo::rok3_plugin::Load(physics::ModelPtr _model, sdf::ElementPtr /*_sdf*/)
 {
     /*
      * Loading model data and initializing the system before simulation 
      */
-    //Practice();
     //* model.sdf file based model data input to [physics::ModelPtr model] for gazebo simulation
     model = _model;
 
@@ -176,7 +320,8 @@ void gazebo::rok3_plugin::Load(physics::ModelPtr _model, sdf::ElementPtr /*_sdf*
     //* setting for getting dt
     last_update_time = model->GetWorld()->GetSimTime();
     update_connection = event::Events::ConnectWorldUpdateBegin(boost::bind(&rok3_plugin::UpdateAlgorithm, this));
-
+    
+    Practice();
 }
 
 void gazebo::rok3_plugin::UpdateAlgorithm()
