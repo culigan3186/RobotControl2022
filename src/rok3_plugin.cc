@@ -181,7 +181,7 @@ MatrixXd jointToTransform12(VectorXd q){
     // q: generalize coordinates, q = [q1,q2,q3]
     
     MatrixXd tmp_m(4,4);
-    double qq = q(0);
+    double qq = q(1);
     tmp_m << cos(qq), 0 , sin(qq), 0, \
              0, 1 , 0, 0, \
              -sin(qq), 0 , cos(qq), 1, \
@@ -193,7 +193,7 @@ MatrixXd jointToTransform23(VectorXd q){
     // q: generalize coordinates, q = [q1,q2,q3]
     
     MatrixXd tmp_m(4,4);
-    double qq = q(0);
+    double qq = q(2);
     tmp_m << cos(qq), 0 , sin(qq), 0, \
              0, 1 , 0, 0, \
              -sin(qq), 0 , cos(qq), 1, \
