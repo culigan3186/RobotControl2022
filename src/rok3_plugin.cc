@@ -154,12 +154,12 @@ MatrixXd getTransformI0(){
     return tmp_m;
 }
 
-MatrixXd getTransform3E(){
+MatrixXd getTransform6E(){
     MatrixXd tmp_m(4,4);
     tmp_m = MatrixXd::Identity(4,4);
     tmp_m  << 1, 0, 0, 0, \
               0, 1, 0, 0, \
-              0, 0, 1, 1, \
+              0, 0, 1, -0.09, \
               0, 0, 0, 1;
 
     return tmp_m;
@@ -170,10 +170,17 @@ MatrixXd jointToTransform01(VectorXd q){
     
     MatrixXd tmp_m(4,4);
     double qq = q(0);
-    tmp_m << cos(qq), 0 , sin(qq), 0, \
-             0, 1 , 0, 0, \
-             -sin(qq), 0 , cos(qq), 1, \
-             0, 0 , 0, 1;
+    double c11,c12,c13, c21,c22,c23, c31,c32,c33;
+    double rx, ry, rz;
+    c11 = cos(qq),  c12 =-sin(qq) , c13 = 0, \
+    c21 = sin(qq), c22 = cos(qq), c23 = 0, \
+    c31 = 0,        c32 = 0      , c33 = 1 ;
+    rx = 0, ry = 0.105, rz = -0.1512;
+
+    tmp_m << c11, c12, c13, rx, \
+             c21, c22, c23, ry, \
+             c31, c32, c33, rz, \
+               0,   0,   0,  1;
     return tmp_m;
 }
 
@@ -182,25 +189,96 @@ MatrixXd jointToTransform12(VectorXd q){
     
     MatrixXd tmp_m(4,4);
     double qq = q(1);
-    tmp_m << cos(qq), 0 , sin(qq), 0, \
-             0, 1 , 0, 0, \
-             -sin(qq), 0 , cos(qq), 1, \
-             0, 0 , 0, 1;
+    double c11,c12,c13, c21,c22,c23, c31,c32,c33;
+    double rx, ry, rz;
+    c11 = 1,        c12 =0       , c13 = 0, \
+    c21 = 0,        c22 = cos(qq), c23 = -sin(qq), \
+    c31 = 0,        c32 = sin(qq)      , c33 = cos(qq) ;
+    rx = 0, ry = 0, rz = 0;
+
+    tmp_m << c11, c12, c13, rx, \
+             c21, c22, c23, ry, \
+             c31, c32, c33, rz, \
+               0,   0,   0,  1;
     return tmp_m;
 }
-
 MatrixXd jointToTransform23(VectorXd q){
     // q: generalize coordinates, q = [q1,q2,q3]
     
     MatrixXd tmp_m(4,4);
     double qq = q(2);
-    tmp_m << cos(qq), 0 , sin(qq), 0, \
-             0, 1 , 0, 0, \
-             -sin(qq), 0 , cos(qq), 1, \
-             0, 0 , 0, 1;
+    double c11,c12,c13, c21,c22,c23, c31,c32,c33;
+    double rx, ry, rz;
+    c11 = cos(qq),        c12 =0       , c13 = sin(qq),\
+    c21 = 0,              c22 = 1,      c23 = 0, \
+    c31 = -sin(qq),        c32 = 0      , c33 = cos(qq) ;
+    rx = 0, ry = 0, rz = 0;
+
+    tmp_m << c11, c12, c13, rx, \
+             c21, c22, c23, ry, \
+             c31, c32, c33, rz, \
+               0,   0,   0,  1;
     return tmp_m;
 }
+
+MatrixXd jointToTransform34(VectorXd q){
+    // q: generalize coordinates, q = [q1,q2,q3]
     
+    MatrixXd tmp_m(4,4);
+    double qq = q(3);
+    double c11,c12,c13, c21,c22,c23, c31,c32,c33;
+    double rx, ry, rz;
+    c11 = cos(qq),        c12 =0       , c13 = sin(qq),\
+    c21 = 0,              c22 = 1,      c23 = 0, \
+    c31 = -sin(qq),        c32 = 0      , c33 = cos(qq) ;
+    rx = 0, ry = 0, rz = -0.35;
+
+    tmp_m << c11, c12, c13, rx, \
+             c21, c22, c23, ry, \
+             c31, c32, c33, rz, \
+               0,   0,   0,  1;
+    return tmp_m;
+}
+MatrixXd jointToTransform45(VectorXd q){
+    // q: generalize coordinates, q = [q1,q2,q3]
+    
+    MatrixXd tmp_m(4,4);
+    double qq = q(4);
+    double c11,c12,c13, c21,c22,c23, c31,c32,c33; // Rotation Matrix element
+    double rx, ry, rz; // position vector
+    c11 = cos(qq),        c12 =0       , c13 = sin(qq),\
+    c21 = 0,              c22 = 1      , c23 = 0, \
+    c31 = -sin(qq),       c32 = 0      , c33 = cos(qq) ;
+    
+    rx = 0, ry = 0, rz = -0.35;
+
+    tmp_m << c11, c12, c13, rx, \
+             c21, c22, c23, ry, \
+             c31, c32, c33, rz, \
+               0,   0,   0,  1;
+    return tmp_m;
+}
+MatrixXd jointToTransform56(VectorXd q){
+    // q: generalize coordinates, q = [q1,q2,q3]
+    
+    MatrixXd tmp_m(4,4);
+    double qq = q(5);
+    double c11,c12,c13, c21,c22,c23, c31,c32,c33;
+    double rx, ry, rz;
+    c11 = 1,        c12 =0       , c13 = 0,\
+    c21 = 0,              c22 = cos(qq),      c23 = -sin(qq), \
+    c31 = 0,        c32 = sin(qq)      , c33 = cos(qq) ;
+    rx = 0, ry = 0, rz = 0;
+
+    tmp_m << c11, c12, c13, rx, \
+             c21, c22, c23, ry, \
+             c31, c32, c33, rz, \
+               0,   0,   0,  1;
+    return tmp_m;
+}
+
+
+
 VectorXd jointToPosition(VectorXd q)
 {
     VectorXd tmp_v = VectorXd::Zero(3);
@@ -211,7 +289,10 @@ VectorXd jointToPosition(VectorXd q)
             jointToTransform01(q)*
             jointToTransform12(q)*
             jointToTransform23(q)*
-            getTransform3E();
+            jointToTransform34(q)*
+            jointToTransform45(q)*
+            jointToTransform56(q)*
+            getTransform6E();
     
     // Block operation manual:   http://eigen.tuxfamily.org/dox/group__TutorialBlockOperations.html
     tmp_v = T_IE.block(0,3,3,1); // starting at (0,3), block size (3,1)
@@ -230,7 +311,10 @@ MatrixXd jointToRotMat(VectorXd q)
             jointToTransform01(q)*
             jointToTransform12(q)*
             jointToTransform23(q)*
-            getTransform3E();
+            jointToTransform34(q)*
+            jointToTransform45(q)*
+            jointToTransform56(q)*
+            getTransform6E();
     
     tmp_m = T_IE.block(0, 0, 3, 3);
     
@@ -254,20 +338,27 @@ VectorXd rotToEuler(MatrixXd rotMat)
 
 void Practice()
 {
-    MatrixXd TI0(4,4), T01(4,4), T12(4,4), T23(4,4), T3E(4,4), TIE(4,4), CIE(3,3);
-    Vector3d q = {30, 30, 30};
+    MatrixXd TI0(4,4), T01(4,4), T12(4,4), T23(4,4), T34(4,4),T45(4,4),T56(4,4),T6E(4,4),TIE(4,4), CIE(3,3);
+    VectorXd q(6); // Vector3D can't create 6D array
+    q << 10, 20, 30, 40, 50, 60;
+    for(int i = 0; i<6; i++)
+    {
+        q[i] *= D2R;
+    }
     Vector3d pos, euler;
-    q = q * PI/180; // Degree to Radian
+
     
     TI0 = getTransformI0();
-    T3E = getTransform3E();
+    T6E = getTransform6E();
     T01 = jointToTransform01(q);
     T12 = jointToTransform12(q);
     T23 = jointToTransform23(q);
+    T34 = jointToTransform34(q);
+    T45 = jointToTransform45(q);
+    T56 = jointToTransform56(q);
     
     
-    TIE = TI0*T01*T12*T23*T3E;
-    
+    TIE = TI0*T01*T12*T23*T34*T45*T56*T6E;
     pos = jointToPosition(q);
     CIE = jointToRotMat(q);
     euler = rotToEuler(CIE); // EulerZYX 
@@ -276,8 +367,8 @@ void Practice()
     std::cout <<"TIE = \n" << TIE << std::endl;
     
     std::cout <<"Position = " << pos << std::endl;
-    std::cout <<"CIE = " << CIE << std::endl;
-    std::cout <<"Euler= " << euler << std::endl;
+    std::cout <<"CIE = " << CIE << std::endl; 
+    std::cout <<"Euler= " << euler * R2D << std::endl; // radian to degree
     
 //    std::cout << "TI0 = \n" << TI0 << std::endl;
 //    std::cout << "T01 = \n" << T01 << std::endl;
