@@ -369,6 +369,7 @@ void Practice()
     std::cout <<"Position = " << pos << std::endl;
     std::cout <<"CIE = " << CIE << std::endl; 
     std::cout <<"Euler= " << euler * R2D << std::endl; // radian to degree
+    // Z(yaw), Y(Roll), X(Pitch) order
     
 //    std::cout << "TI0 = \n" << TI0 << std::endl;
 //    std::cout << "T01 = \n" << T01 << std::endl;
@@ -435,6 +436,13 @@ void gazebo::rok3_plugin::UpdateAlgorithm()
     //* Read Sensors data
     GetjointData();
     
+    //* Target Angles
+    joint[LHY].targetRadian = 10 * D2R;
+    joint[LHR].targetRadian = 20 * D2R;
+    joint[LHP].targetRadian = 30 * D2R;
+    joint[LKN].targetRadian = 40 * D2R;
+    joint[LAP].targetRadian = 50 * D2R;
+    joint[LAR].targetRadian = 60 * D2R;
     //* Joint Controller
     jointController();
 }
