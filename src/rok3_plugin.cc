@@ -472,49 +472,115 @@ MatrixXd jointToRotJac(VectorXd q)
     return J_R;
 }
 
+MatrixXd pseudoInverseMat(MatrixXd A, double lambda)
+{
+    // Input: Any m-by-n matrix
+    // Output: An n-by-m pseudo-inverse of the input according to the Moore-Penrose formula
+    MatrixXd pinvA, tmp;
+    
+    int m = A.rows();
+    int n = A.cols();
+    if(m >= n)
+    {
+        tmp = A.transpose() * A + lambda * lambda * MatrixXd::Identity(n,n);
+        pinvA = tmp.inverse() * A.transpose();
+    }
+    else
+    {
+        tmp = A*A.transpose() + lambda * lambda * MatrixXd::Identity(m, m);
+        pinvA = A.transpose() * tmp.inverse();
+    }
+    std::cout << "pinvA : " << pinvA << std::endl;
+
+
+    return pinvA;
+}
+
+VectorXd rotMatToRotVec(MatrixXd C)
+{
+    // Input: a rotation matrix C
+    // Output: the rotational vector which describes the rotation C
+    Vector3d phi,n;
+    double th;
+    
+    th = acos((C(0,0) + C(1,1) + C(2,2) -1) / 2);
+    
+    if(fabs(th)<0.001){
+         n << 0,0,0;
+    }
+    else{
+        n<< (C(2,1) - C(1,2)),
+            (C(0,2) - C(2,0)),
+            (C(1,0) - C(0,1));
+        n = n * 1/(2*sin(th));
+    }
+        
+    phi = th*n;
+    
+   
+    return phi;
+}
 void Practice()
 {
     MatrixXd J_R(3,6),J_P = MatrixXd::Zero(3,6);
     MatrixXd TI0(4,4), T01(4,4), T12(4,4), T23(4,4), T34(4,4),T45(4,4),T56(4,4),T6E(4,4),TIE(4,4), CIE(3,3);
-    VectorXd q(6); // Vector3D can't create 6D array
-    q << 10, 20, 30, 40, 50, 60;
+    VectorXd q_des(6); // Vector3D can't create 6D array
+    q_des << 10, 20, 30, 40, 50, 60;
     for(int i = 0; i<6; i++)
     {
-        q[i] *= D2R;
+        q_des[i] *= D2R;
     }
-    Vector3d pos, euler;
-
-    
-    TI0 = getTransformI0();
-    T6E = getTransform6E();
-    T01 = jointToTransform01(q);
-    T12 = jointToTransform12(q);
-    T23 = jointToTransform23(q);
-    T34 = jointToTransform34(q);
-    T45 = jointToTransform45(q);
-    T56 = jointToTransform56(q);
-    
-    
-    TIE = TI0*T01*T12*T23*T34*T45*T56*T6E;
-    pos = jointToPosition(q);
-    CIE = jointToRotMat(q);
-    euler = rotToEuler(CIE); // EulerZYX 
-    jointToPosJac(q);
-    jointToRotJac(q);
-    
-    std::cout << "Hello World!" << std::endl;
-    std::cout <<"TIE = \n" << TIE << std::endl;
-    
-    std::cout <<"Position = " << pos << std::endl;
-    std::cout <<"CIE = " << CIE << std::endl; 
-    std::cout <<"Euler= " << euler * R2D << std::endl; // radian to degree
+//    Vector3d pos, euler;
+//
+//    
+//    TI0 = getTransformI0();
+//    T6E = getTransform6E();
+//    T01 = jointToTransform01(q);
+//    T12 = jointToTransform12(q);
+//    T23 = jointToTransform23(q);
+//    T34 = jointToTransform34(q);
+//    T45 = jointToTransform45(q);
+//    T56 = jointToTransform56(q);
+//    
+//    
+//    TIE = TI0*T01*T12*T23*T34*T45*T56*T6E;
+//    pos = jointToPosition(q);
+//    CIE = jointToRotMat(q);
+//    euler = rotToEuler(CIE); // EulerZYX 
+//    jointToPosJac(q);
+//    jointToRotJac(q);
+//    
+//    std::cout << "Hello World!" << std::endl;
+//    std::cout <<"TIE = \n" << TIE << std::endl;
+//    
+//    std::cout <<"Position = " << pos << std::endl;
+//    std::cout <<"CIE = " << CIE << std::endl; 
+//    std::cout <<"Euler= " << euler * R2D << std::endl; // radian to degree
     // Z(yaw), Y(Roll), X(Pitch) order
+    
+
     
 //    std::cout << "TI0 = \n" << TI0 << std::endl;
 //    std::cout << "T01 = \n" << T01 << std::endl;
 //    std::cout << "T12 = \n" << T12 << std::endl;
 //    std::cout << "T23 = \n" << T23 << std::endl;
 //    std::cout << "T3E = \n" << T3E << std::endl;
+    MatrixXd Jac = MatrixXd::Zero(6,6);
+    Jac << jointToPosJac(q_des),jointToRotJac(q_des); // geometric jacobian
+                   
+    MatrixXd pinvj;
+    pinvj = pseudoInverseMat(Jac, 0.0);
+
+    VectorXd q_init(6),dph(3);
+    MatrixXd C_err(3,3), C_des(3,3), C_init(3,3);
+
+    q_init = 0.5*q_des;
+    C_des = jointToRotMat(q_des);
+    C_init = jointToRotMat(q_init);
+    C_err = C_des * C_init.transpose();
+
+    dph = rotMatToRotVec(C_err);
+    std::cout << "dph: " << dph << std::endl;
 }
 
 
