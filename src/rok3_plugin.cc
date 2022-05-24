@@ -520,15 +520,80 @@ VectorXd rotMatToRotVec(MatrixXd C)
    
     return phi;
 }
+
+VectorXd inverseKinematics(Vector3d r_des, MatrixXd C_des, VectorXd q0, double tol)
+{
+    // Input: desired end-effector position, desired end-effector orientation, initial guess for joint angles, threshold for the stopping-criterion
+    // Output: joint angles which match desired end-effector position and orientation
+    double num_it;
+    MatrixXd J_P(6,6), J_R(6,6), J(6,6), pinvJ(6,6), C_err(3,3), C_IE(3,3);
+    VectorXd q(6),dq(6),dXe(6);
+    Vector3d dr, dph;
+    double lambda;
+    
+    //* Set maximum number of iterations
+    double max_it = 200;
+    
+    //* Initialize the solution with the initial guess
+    q=q0;
+    C_IE = jointToRotMat(q);
+    C_err = C_des * C_IE.transpose();// orientation error
+    
+    //* Damping factor
+    lambda = 0.001;
+    
+    //* Initialize error
+    dr = r_des - jointToPosition(q);
+    dph = rotMatToRotVec(C_err);
+    dXe << dr(0), dr(1), dr(2), dph(0), dph(1), dph(2);
+    
+    ////////////////////////////////////////////////
+    //** Iterative inverse kinematics
+    ////////////////////////////////////////////////
+    
+    //* Iterate until terminating condition
+    while (num_it<max_it && dXe.norm()>tol)
+    {
+        
+        //Compute Inverse Jacobian
+        J_P = jointToPosJac(q);
+        J_R = jointToRotJac(q);
+
+        J.block(0,0,3,6) = J_P;
+        J.block(3,0,3,6) = J_R; // Geometric Jacobian
+        
+        // Convert to Geometric Jacobian to Analytic Jacobian
+        dq = pseudoInverseMat(J,lambda)*dXe;
+        
+        // Update law
+        q += 0.5*dq;
+        
+        // Update error
+        C_IE = jointToRotMat(q);
+        C_err = C_des * C_IE.transpose();
+        
+        dr = r_des - jointToPosition(q);
+        dph = rotMatToRotVec(C_err);
+        dXe << dr(0), dr(1), dr(2), dph(0), dph(1), dph(2);
+                   
+        num_it++;
+    }
+    std::cout << "iteration: " << num_it << ", value: " << q*R2D << std::endl;
+    
+    return q;
+}
+
 void Practice()
 {
     MatrixXd J_R(3,6),J_P = MatrixXd::Zero(3,6);
     MatrixXd TI0(4,4), T01(4,4), T12(4,4), T23(4,4), T34(4,4),T45(4,4),T56(4,4),T6E(4,4),TIE(4,4), CIE(3,3);
-    VectorXd q_des(6); // Vector3D can't create 6D array
-    q_des << 10, 20, 30, 40, 50, 60;
+    VectorXd q(6),q_cal(6); // Vector3D can't create 6D array
+    Vector3d r_des;
+    MatrixXd C_des;
+    q << 10, 20, 30, 40, 50, 60;
     for(int i = 0; i<6; i++)
     {
-        q_des[i] *= D2R;
+        q[i] *= D2R;
     }
 //    Vector3d pos, euler;
 //
@@ -565,22 +630,27 @@ void Practice()
 //    std::cout << "T12 = \n" << T12 << std::endl;
 //    std::cout << "T23 = \n" << T23 << std::endl;
 //    std::cout << "T3E = \n" << T3E << std::endl;
-    MatrixXd Jac = MatrixXd::Zero(6,6);
-    Jac << jointToPosJac(q_des),jointToRotJac(q_des); // geometric jacobian
-                   
-    MatrixXd pinvj;
-    pinvj = pseudoInverseMat(Jac, 0.0);
+//    MatrixXd Jac = MatrixXd::Zero(6,6);
+//    Jac << jointToPosJac(q),jointToRotJac(q); // geometric jacobian
+//                   
+//    MatrixXd pinvj;
+//    pinvj = pseudoInverseMat(Jac, 0.0);
 
-    VectorXd q_init(6),dph(3);
-    MatrixXd C_err(3,3), C_des(3,3), C_init(3,3);
+//    VectorXd q_init(6),dph(3);
+//    MatrixXd C_err(3,3), C_des(3,3), C_init(3,3);
 
-    q_init = 0.5*q_des;
-    C_des = jointToRotMat(q_des);
-    C_init = jointToRotMat(q_init);
-    C_err = C_des * C_init.transpose();
+//    q_init = 0.5*q;
+//    C_des = jointToRotMat(q);
+//    C_init = jointToRotMat(q_init);
+//    C_err = C_des * C_init.transpose();
 
-    dph = rotMatToRotVec(C_err);
-    std::cout << "dph: " << dph << std::endl;
+//    dph = rotMatToRotVec(C_err);
+//    std::cout << "dph: " << dph << std::endl;
+    
+    r_des = jointToPosition(q);
+    C_des = jointToRotMat(q);
+
+    q_cal = inverseKinematics(r_des, C_des, q*0.5, 0.001);
 }
 
 
