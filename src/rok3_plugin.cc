@@ -57,6 +57,11 @@ using namespace RigidBodyDynamics;
 using namespace RigidBodyDynamics::Math;
 
 using namespace std;
+// VectorXd inverseKinematics(Vector3d r_des, MatrixXd C_des, VectorXd q0, double tol, std::string leg = "L");
+
+Vector3d r_des;
+MatrixXd C_des;
+VectorXd tar_q_left(6),q(6);
 
 VectorXd q_global(6);
 Vector3d init_pos;
@@ -64,7 +69,25 @@ Vector3d cmd_pos, cur_pos;
 VectorXd q_left_cmd(6), r_left_des(6);
 MatrixXd C_left_des(3,3);
 
+MatrixXd goal_left_rot(3,3);
+MatrixXd init_left_rot(3,3);
+MatrixXd current_left_rot(3,3);
+MatrixXd cmd_left_rot(3,3);
+
+MatrixXd goal_right_rot(3,3);
+MatrixXd init_right_rot(3,3);
+MatrixXd current_right_rot(3,3);
+MatrixXd cmd_right_rot(3,3);
+
+VectorXd q_init_L(6);
+VectorXd q_init_R(6);
+
 int status = 0;
+
+//practice 6
+bool status_1_check = false;
+bool status_2_check = false;
+bool status_3_check = false;
 
 namespace gazebo
 {
@@ -172,7 +195,7 @@ MatrixXd getTransform6E(){
     return tmp_m;
 }
 
-MatrixXd jointToTransform01(VectorXd q){
+MatrixXd jointToTransform01(VectorXd q, std::string leg="L"){
     // q: generalize coordinates, q = [q1,q2,q3]
     
     MatrixXd tmp_m(4,4);
@@ -183,7 +206,7 @@ MatrixXd jointToTransform01(VectorXd q){
     c21 = sin(qq), c22 = cos(qq), c23 = 0, \
     c31 = 0,        c32 = 0      , c33 = 1 ;
     rx = 0, ry = 0.105, rz = -0.1512;
-
+    if(leg=="R") ry = -ry;
     tmp_m << c11, c12, c13, rx, \
              c21, c22, c23, ry, \
              c31, c32, c33, rz, \
@@ -286,13 +309,14 @@ MatrixXd jointToTransform56(VectorXd q){
 
 
 
-VectorXd jointToPosition(VectorXd q)
+VectorXd jointToPosition(VectorXd q, std::string leg = "L")
 {
     VectorXd tmp_v = VectorXd::Zero(3);
     MatrixXd T_IE(4,4);
     
-    
-    T_IE = getTransformI0()*
+    if(leg =="L")
+    {
+        T_IE = getTransformI0()*
             jointToTransform01(q)*
             jointToTransform12(q)*
             jointToTransform23(q)*
@@ -300,7 +324,21 @@ VectorXd jointToPosition(VectorXd q)
             jointToTransform45(q)*
             jointToTransform56(q)*
             getTransform6E();
-    
+    }
+    else if(leg =="R")
+    {
+        T_IE = getTransformI0()*
+            jointToTransform01(q,"R")*
+            jointToTransform12(q)*
+            jointToTransform23(q)*
+            jointToTransform34(q)*
+            jointToTransform45(q)*
+            jointToTransform56(q)*
+            getTransform6E();
+    }
+
+
+
     // Block operation manual:   http://eigen.tuxfamily.org/dox/group__TutorialBlockOperations.html
     tmp_v = T_IE.block(0,3,3,1); // starting at (0,3), block size (3,1)
     
@@ -308,25 +346,41 @@ VectorXd jointToPosition(VectorXd q)
 }
 
 
-MatrixXd jointToRotMat(VectorXd q)
+
+MatrixXd jointToRotMat(VectorXd q, std::string leg = "L")
 {
     MatrixXd tmp_m = VectorXd::Zero(3);
     MatrixXd T_IE(4,4);
     
-    
-    T_IE = getTransformI0()*
-            jointToTransform01(q)*
-            jointToTransform12(q)*
-            jointToTransform23(q)*
-            jointToTransform34(q)*
-            jointToTransform45(q)*
-            jointToTransform56(q)*
-            getTransform6E();
+    if(leg == "L")
+    {
+        T_IE = getTransformI0()*
+                jointToTransform01(q)*
+                jointToTransform12(q)*
+                jointToTransform23(q)*
+                jointToTransform34(q)*
+                jointToTransform45(q)*
+                jointToTransform56(q)*
+                getTransform6E();
+    }
+    else if(leg=="R")
+    {
+        T_IE = getTransformI0()*
+                jointToTransform01(q,"R")*
+                jointToTransform12(q)*
+                jointToTransform23(q)*
+                jointToTransform34(q)*
+                jointToTransform45(q)*
+                jointToTransform56(q)*
+                getTransform6E();
+    }
     
     tmp_m = T_IE.block(0, 0, 3, 3);
     
     return tmp_m;
 }
+
+
 
 VectorXd rotToEuler(MatrixXd rotMat)
 {
@@ -338,11 +392,11 @@ VectorXd rotToEuler(MatrixXd rotMat)
     y = atan2( -rotMat(2,0), sqrt(pow(rotMat(2,1), 2.0) + pow(rotMat(2,2), 2.0)) );
     x = atan2(rotMat(2,1), rotMat(2,2));
     eulerZYX << z, y, x; 
-    std::cout << eulerZYX << endl;
+//    std::cout << eulerZYX << endl;
     
     return eulerZYX;
 }
-MatrixXd jointToPosJac(VectorXd q)
+MatrixXd jointToPosJac(VectorXd q, std::string leg = "L")
 {
     // Input: vector of generalized coordinates (joint angles)
     // Output: J_P, Jacobian of the end-effector translation which maps joint velocities to end-effector linear velocities in I frame.
@@ -358,7 +412,11 @@ MatrixXd jointToPosJac(VectorXd q)
 
     //* Compute the relative homogeneous transformation matrices.
     T_I0 = getTransformI0();
-    T_01 = jointToTransform01(q);
+    if(leg != "R" && leg != "L")
+    {
+        std::cout << "leg value invalid error\n";
+    }
+    T_01 = jointToTransform01(q,leg);
     T_12 = jointToTransform12(q);
     T_23 = jointToTransform23(q);
     T_34 = jointToTransform34(q);
@@ -417,12 +475,12 @@ MatrixXd jointToPosJac(VectorXd q)
     J_P.col(4) << n_I_5.cross(r_I_IE-r_I_I5);
     J_P.col(5) << n_I_6.cross(r_I_IE-r_I_I6);
 
-    std::cout << "Test, JP:" << std::endl << J_P << std::endl;
+//    std::cout << "Test, JP:" << std::endl << J_P << std::endl;
 
     return J_P;
 }
 
-MatrixXd jointToRotJac(VectorXd q)
+MatrixXd jointToRotJac(VectorXd q, std::string leg = "L")
 {
    // Input: vector of generalized coordinates (joint angles)
     // Output: J_R, Jacobian of the end-effector orientation which maps joint velocities to end-effector angular velocities in I frame.
@@ -434,7 +492,11 @@ MatrixXd jointToRotJac(VectorXd q)
 
     //* Compute the relative homogeneous transformation matrices.
     T_I0 = getTransformI0();
-    T_01 = jointToTransform01(q);
+    if(leg != "R" && leg != "L")
+    {
+        std::cout << "leg value invalid error\n";
+    }
+    T_01 = jointToTransform01(q,leg);
     T_12 = jointToTransform12(q);
     T_23 = jointToTransform23(q);
     T_34 = jointToTransform34(q);
@@ -474,7 +536,7 @@ MatrixXd jointToRotJac(VectorXd q)
     J_R.col(4) << R_I5*n_5;
     J_R.col(5) << R_I6*n_6;
 
-    std::cout << "Test, J_R:" << std::endl << J_R << std::endl;
+//    std::cout << "Test, J_R:" << std::endl << J_R << std::endl;
 
     return J_R;
 }
@@ -497,7 +559,7 @@ MatrixXd pseudoInverseMat(MatrixXd A, double lambda)
         tmp = A*A.transpose() + lambda * lambda * MatrixXd::Identity(m, m);
         pinvA = A.transpose() * tmp.inverse();
     }
-    std::cout << "pinvA : " << pinvA << std::endl;
+//    std::cout << "pinvA : " << pinvA << std::endl;
 
 
     return pinvA;
@@ -528,10 +590,11 @@ VectorXd rotMatToRotVec(MatrixXd C)
     return phi;
 }
 
-VectorXd inverseKinematics(Vector3d r_des, MatrixXd C_des, VectorXd q0, double tol)
+VectorXd inverseKinematics(Vector3d r_des, MatrixXd C_des, VectorXd q0, double tol, std::string leg = "L")
 {
     // Input: desired end-effector position, desired end-effector orientation, initial guess for joint angles, threshold for the stopping-criterion
     // Output: joint angles which match desired end-effector position and orientation
+    
     double num_it;
     MatrixXd J_P(6,6), J_R(6,6), J(6,6), pinvJ(6,6), C_err(3,3), C_IE(3,3);
     VectorXd q(6),dq(6),dXe(6);
@@ -541,16 +604,21 @@ VectorXd inverseKinematics(Vector3d r_des, MatrixXd C_des, VectorXd q0, double t
     //* Set maximum number of iterations
     double max_it = 200;
     
+    // leg value valid check 
+    if(leg != "R" && leg != "L")
+    {
+        std::cout << "leg value invalid error\n";
+    }
     //* Initialize the solution with the initial guess
-    q=q0;
-    C_IE = jointToRotMat(q);
+    q = q0;
+    C_IE = jointToRotMat(q,leg);
     C_err = C_des * C_IE.transpose();// orientation error
     
     //* Damping factor
     lambda = 0.001;
     
     //* Initialize error
-    dr = r_des - jointToPosition(q);
+    dr = r_des - jointToPosition(q,leg);
     dph = rotMatToRotVec(C_err);
     dXe << dr(0), dr(1), dr(2), dph(0), dph(1), dph(2);
     
@@ -563,8 +631,8 @@ VectorXd inverseKinematics(Vector3d r_des, MatrixXd C_des, VectorXd q0, double t
     {
         
         //Compute Inverse Jacobian
-        J_P = jointToPosJac(q);
-        J_R = jointToRotJac(q);
+        J_P = jointToPosJac(q,leg);
+        J_R = jointToRotJac(q,leg);
 
         J.block(0,0,3,6) = J_P;
         J.block(3,0,3,6) = J_R; // Geometric Jacobian
@@ -576,23 +644,22 @@ VectorXd inverseKinematics(Vector3d r_des, MatrixXd C_des, VectorXd q0, double t
         q += 0.5*dq;
         
         // Update error
-        C_IE = jointToRotMat(q);
+        C_IE = jointToRotMat(q,leg);
         C_err = C_des * C_IE.transpose();
         
-        dr = r_des - jointToPosition(q);
+        dr = r_des - jointToPosition(q,leg);
         dph = rotMatToRotVec(C_err);
         dXe << dr(0), dr(1), dr(2), dph(0), dph(1), dph(2);
                    
         num_it++;
     }
-    std::cout << "iteration: " << num_it << ", value: " << q*R2D << std::endl;
+//    std::cout << "iteration: " << num_it << ", value: " << q*R2D << std::endl;
     
     return q;
 }
-
 double func_1_cos(double t, double init, double final, double T){
     double des;
-    des = (final - init)*0.5*(1.0 - cos(PI*(t/T))) + init;
+    des = (final - init) * 0.5 * (1.0 - cos(PI*(t/T))) + init;
     return des;
 }
 
@@ -615,61 +682,7 @@ void Practice()
         q[i] *= D2R;
     }
     Vector3d pos, euler;
-//
-//    
-//    TI0 = getTransformI0();
-//    T6E = getTransform6E();
-//    T01 = jointToTransform01(q);
-//    T12 = jointToTransform12(q);
-//    T23 = jointToTransform23(q);
-//    T34 = jointToTransform34(q);
-//    T45 = jointToTransform45(q);
-//    T56 = jointToTransform56(q);
-//    
-//    
-//    TIE = TI0*T01*T12*T23*T34*T45*T56*T6E;
-//    pos = jointToPosition(q);
-//    CIE = jointToRotMat(q);
-//    euler = rotToEuler(CIE); // EulerZYX 
-//    jointToPosJac(q);
-//    jointToRotJac(q);
-//    
-//    std::cout << "Hello World!" << std::endl;
-//    std::cout <<"TIE = \n" << TIE << std::endl;
-//    
-//    std::cout <<"Position = " << pos << std::endl;
-//    std::cout <<"CIE = " << CIE << std::endl; 
-//    std::cout <<"Euler= " << euler * R2D << std::endl; // radian to degree
-    // Z(yaw), Y(Roll), X(Pitch) order
-    
 
-    
-//    std::cout << "TI0 = \n" << TI0 << std::endl;
-//    std::cout << "T01 = \n" << T01 << std::endl;
-//    std::cout << "T12 = \n" << T12 << std::endl;
-//    std::cout << "T23 = \n" << T23 << std::endl;
-//    std::cout << "T3E = \n" << T3E << std::endl;
-//    MatrixXd Jac = MatrixXd::Zero(6,6);
-//    Jac << jointToPosJac(q),jointToRotJac(q); // geometric jacobian
-//                   
-//    MatrixXd pinvj;
-//    pinvj = pseudoInverseMat(Jac, 0.0);
-
-//    VectorXd q_init(6),dph(3);
-//    MatrixXd C_err(3,3), C_des(3,3), C_init(3,3);
-
-//    q_init = 0.5*q;
-//    C_des = jointToRotMat(q);
-//    C_init = jointToRotMat(q_init);
-//    C_err = C_des * C_init.transpose();
-
-//    dph = rotMatToRotVec(C_err);
-//    std::cout << "dph: " << dph << std::endl;
-    
-//    r_des = jointToPosition(q);
-//      C_des = jointToRotMat(q);
-//    cout <<"r_des" << r_des << "\n";
-//    cout <<"C_des" << C_des << "\n";
     r_des << 0,
              0.105,
             -0.55;
@@ -719,7 +732,7 @@ void gazebo::rok3_plugin::Load(physics::ModelPtr _model, sdf::ElementPtr /*_sdf*
     last_update_time = model->GetWorld()->GetSimTime();
     update_connection = event::Events::ConnectWorldUpdateBegin(boost::bind(&rok3_plugin::UpdateAlgorithm, this));
     
-    Practice();
+    // Practice();
 }
 
 
@@ -728,9 +741,7 @@ void gazebo::rok3_plugin::UpdateAlgorithm()
     /*
      * Algorithm update while simulation
      */
-    Vector3d r_des;
-    MatrixXd C_des;
-    VectorXd tar_q(6),q(6);
+    
     //* UPDATE TIME : 1ms
     common::Time current_time = model->GetWorld()->GetSimTime();
     dt = current_time.Double() - last_update_time.Double();
@@ -753,95 +764,102 @@ void gazebo::rok3_plugin::UpdateAlgorithm()
 //    joint[LAP].targetRadian = q_global(4); 
 //    joint[LAR].targetRadian = q_global(5);
     //* Joint Controller
-    q << 0, 0, -30, 60, -30, 0;
-    for(int i = 0; i<6; i++)
+    
+    
+    if(status==0)
     {
-        q[i] *= D2R;
-    }
-
-     r_des << 0,
-             0.105,
-            -0.55;
-    C_des = MatrixXd::Identity(3,3);
-//    C_des << 1,0,0,\
-//             0,1,0,\
-//             0,0,1;
-
-
-    q_left_cmd = q;
-    status = 1;
-    tar_q = inverseKinematics(r_des, C_des, q*0.5, 0.001);
-//    if(status == 0)
-//    {
-        q_left_cmd(0) = func_1_cos(time,0,tar_q(0),5);
-        q_left_cmd(1) = func_1_cos(time,0,tar_q(1),5);
-        q_left_cmd(2) = func_1_cos(time,0,tar_q(2),5);
-        q_left_cmd(3) = func_1_cos(time,0,tar_q(3),5);
-        q_left_cmd(4) = func_1_cos(time,0,tar_q(4),5);
-        q_left_cmd(5) = func_1_cos(time,0,tar_q(5),5);
-//    }
-    if(status == 1 && time <= 5)
-    {
-        r_des(2) += 0.2;
-        tar_q = inverseKinematics(r_des, C_des, q*0.5, 0.001);
-        q_left_cmd(0) = func_1_cos(time,0,tar_q(0),5);
-        q_left_cmd(1) = func_1_cos(time,0,tar_q(1),5);
-        q_left_cmd(2) = func_1_cos(time,0,tar_q(2),5);
-        q_left_cmd(3) = func_1_cos(time,0,tar_q(3),5);
-        q_left_cmd(4) = func_1_cos(time,0,tar_q(4),5);
-        q_left_cmd(5) = func_1_cos(time,0,tar_q(5),5);
+        status = 1;
+        r_des << 0, 0.105, -0.55;
+        C_des = MatrixXd::Identity(3,3);
+        q << 0, 0, -30*D2R, 60*D2R, -30*D2R, 0; 
+        tar_q_left = inverseKinematics(r_des, C_des, q, 0.001);
     }
     
-    else if(status == 2)
-    {
-        if(time <= 5)
-        {
-            // z axis : 0.2m Leg Up
-            r_des(2) += 0.2;
-       
-        }
-        
-        else if (time > 5 && time <= 10)
-        {
-            // z axis : 0.2m Leg Down
-            r_des(2) -= 0.2;
-            tar_q = inverseKinematics(r_des, C_des, q*0.5, 0.001);
 
-        }
-        
+    if(time < 5) // status = 0 
+    {   
+        q_left_cmd(0) = func_1_cos(time,0,tar_q_left(0),5);
+        q_left_cmd(1) = func_1_cos(time,0,tar_q_left(1),5);
+        q_left_cmd(2) = func_1_cos(time,0,tar_q_left(2),5);
+        q_left_cmd(3) = func_1_cos(time,0,tar_q_left(3),5);
+        q_left_cmd(4) = func_1_cos(time,0,tar_q_left(4),5);
+        q_left_cmd(5) = func_1_cos(time,0,tar_q_left(5),5);   
     }
     
-    else if(status == 3)
+    else if(status >=1 && !status_1_check && time >= 5)
     {
-        if(time <= 5)
-        {
-            // z axis : 0.2m Leg Up
-            r_des(2) += 0.2;
-            tar_q = inverseKinematics(r_des, C_des, q*0.5, 0.001);
-            q_left_cmd(0) = func_1_cos(time,0,tar_q(0),5);
-            q_left_cmd(1) = func_1_cos(time,0,tar_q(1),5);
-            q_left_cmd(2) = func_1_cos(time,0,tar_q(2),5);
-            q_left_cmd(3) = func_1_cos(time,0,tar_q(3),5);
-            q_left_cmd(4) = func_1_cos(time,0,tar_q(4),5);
-            q_left_cmd(5) = func_1_cos(time,0,tar_q(5),5);
-        }
-        
-        else if(time > 5 && time <= 10)
-        {
-            // z axis Rot 90 deg.  
-           
-            tar_q = inverseKinematics(r_des, C_des, q*0.5, 0.001);
-            q_left_cmd(0) = func_1_cos(time,0,tar_q(0),5);
-            q_left_cmd(1) = func_1_cos(time,0,tar_q(1),5);
-            q_left_cmd(2) = func_1_cos(time,0,tar_q(2),5);
-            q_left_cmd(3) = func_1_cos(time,0,tar_q(3),5);
-            q_left_cmd(4) = func_1_cos(time,0,tar_q(4),5);
-            q_left_cmd(5) = func_1_cos(time,0,tar_q(5),5);
-            
-        }
+        q = tar_q_left;
+        r_des << 0, 0.105, -0.35;
+        tar_q_left = inverseKinematics(r_des, C_des, q, 0.001);
+        status_1_check = true;
+        status = 2;
+        // status = 3;
+    }
+    else if(status >= 1  && time <= 10)
+    {
+
+        double time1 = time - 5;
+    
+        q_left_cmd(0) = func_1_cos(time1, q(0), tar_q_left(0), 5);
+        q_left_cmd(1) = func_1_cos(time1, q(1), tar_q_left(1), 5);
+        q_left_cmd(2) = func_1_cos(time1, q(2), tar_q_left(2), 5);
+        q_left_cmd(3) = func_1_cos(time1, q(3), tar_q_left(3), 5);
+        q_left_cmd(4) = func_1_cos(time1, q(4), tar_q_left(4), 5);
+        q_left_cmd(5) = func_1_cos(time1, q(5), tar_q_left(5), 5);
     }
     
-    std::cout << "status : " << status << "\n";
+    else if (status == 2 && time <= 15 && !status_2_check)
+    {
+        q = tar_q_left;
+        r_des << 0, 0.105, -0.55;
+        tar_q_left = inverseKinematics(r_des, C_des, q, 0.001);
+        status_2_check = true;
+    }
+    else if (status == 3 && time <=15 && !status_3_check)
+    {
+        MatrixXd tmp;
+        double rot;
+        rot = 90*D2R;
+        q = tar_q_left;
+        r_des << 0, 0.105, -0.35;
+        tmp   <<   cos(rot), -sin(rot), 0,
+                   sin(rot),  cos(rot), 0,
+                             0,            0, 1;
+        C_des = tmp;
+        tar_q_left = inverseKinematics(r_des, C_des, q, 0.001);
+        status_3_check = true;
+    }
+    else if(status == 2 && time <= 15)
+    {   
+        double time2 = time - 10.0;
+        
+        q_left_cmd(0) = func_1_cos(time2,q(0),tar_q_left(0),5);
+        q_left_cmd(1) = func_1_cos(time2,q(1),tar_q_left(1),5);
+        q_left_cmd(2) = func_1_cos(time2,q(2),tar_q_left(2),5);
+        q_left_cmd(3) = func_1_cos(time2,q(3),tar_q_left(3),5);
+        q_left_cmd(4) = func_1_cos(time2,q(4),tar_q_left(4),5);
+        q_left_cmd(5) = func_1_cos(time2,q(5),tar_q_left(5),5);
+        
+    }
+    
+    else if(status == 3 && time <= 15)
+    {
+        double time3 = time - 10.0;   
+        q_left_cmd(0) = func_1_cos(time3,q(0),tar_q_left(0),5);
+        q_left_cmd(1) = func_1_cos(time3,q(1),tar_q_left(1),5);
+        q_left_cmd(2) = func_1_cos(time3,q(2),tar_q_left(2),5);
+        q_left_cmd(3) = func_1_cos(time3,q(3),tar_q_left(3),5);
+        q_left_cmd(4) = func_1_cos(time3,q(4),tar_q_left(4),5);
+        q_left_cmd(5) = func_1_cos(time3,q(5),tar_q_left(5),5);
+   
+    }
+    
+//    std::cout << "status : " << status << "\n";
+   for(int i=0; i<6; i++)
+   {
+       std::cout << "q_left_cmd(" << i << ") = " << q_left_cmd(i) << '\n';
+    //    std::cout << "tar_q_left(" << i << "::::: " << tar_q_left(i) << '\n';
+   }
     
     joint[LHY].targetRadian = q_left_cmd(0);
     joint[LHR].targetRadian = q_left_cmd(1);
