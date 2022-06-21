@@ -59,15 +59,17 @@ using namespace RigidBodyDynamics::Math;
 using namespace std;
 // VectorXd inverseKinematics(Vector3d r_des, MatrixXd C_des, VectorXd q0, double tol, std::string leg = "L");
 
-Vector3d r_des;
+Vector3d r_left_des, r_right_des, cur_r_left, cur_r_right;
 MatrixXd C_des;
-VectorXd tar_q_left(6),q(6);
+VectorXd tar_q_left(6),tar_q_right, q(6);
+VectorXd cur_q_left(6), cur_q_right(6);
 
 VectorXd q_global(6);
 Vector3d init_pos;
 Vector3d cmd_pos, cur_pos;
-VectorXd q_left_cmd(6), r_left_des(6);
-MatrixXd C_left_des(3,3);
+VectorXd q_left_cmd(6);
+VectorXd q_right_cmd(6);
+MatrixXd C_left_des(3,3),C_right_des(3,3);
 
 MatrixXd goal_left_rot(3,3);
 MatrixXd init_left_rot(3,3);
@@ -88,6 +90,18 @@ int status = 0;
 bool status_1_check = false;
 bool status_2_check = false;
 bool status_3_check = false;
+
+//term project
+
+bool Right_Flag = false; // false = left, true = right
+bool turn_Flag = false;
+bool turn_finish = false;
+int turn_step = 0;
+
+double turn_radian = 90*D2R;
+
+int turn_count; // turn_count is 3 -> finish
+int step_count;
 
 namespace gazebo
 {
@@ -687,6 +701,7 @@ void Practice()
              0.105,
             -0.55;
     C_des = MatrixXd::Identity(3,3);
+    C_des = C_left_des = C_right_des;
 //    C_des << 1,0,0,\
 //             0,1,0,\
 //             0,0,1;
@@ -722,7 +737,15 @@ void gazebo::rok3_plugin::Load(physics::ModelPtr _model, sdf::ElementPtr /*_sdf*
     //↑↑↑ Check File Path ↑↑↑
     nDoF = rok3_model->dof_count - 6; // Get degrees of freedom, except position and orientation of the robot
     joint = new ROBO_JOINT[nDoF]; // Generation joint variables struct
-
+    
+    q << 0, 0, -30*D2R, 60*D2R, -30*D2R, 0;
+    r_left_des << 0, 0.105, -0.75;
+    r_right_des << 0, -0.105, -0.75;
+    
+    C_des = MatrixXd::Identity(3,3);    
+    C_left_des = C_right_des = C_des;
+    tar_q_left = inverseKinematics(r_left_des, C_left_des, q, 0.001);
+    tar_q_right = inverseKinematics(r_right_des, C_right_des, q, 0.001, "R");
     //* initialize and setting for robot control in gazebo simulation
     initializeJoint();
     SetJointPIDgain();
@@ -755,118 +778,282 @@ void gazebo::rok3_plugin::UpdateAlgorithm()
 
     //* Read Sensors data
     GetjointData();
-    
-    //* Target Angles
-//    joint[LHY].targetRadian = q_global(0); // 
-//    joint[LHR].targetRadian = q_global(1); // 
-//    joint[LHP].targetRadian = q_global(2); //
-//    joint[LKN].targetRadian = q_global(3); // 
-//    joint[LAP].targetRadian = q_global(4); 
-//    joint[LAR].targetRadian = q_global(5);
-    //* Joint Controller
-    
-    
-    if(status==0)
-    {
-        status = 1;
-        r_des << 0, 0.105, -0.55;
-        C_des = MatrixXd::Identity(3,3);
-        q << 0, 0, -30*D2R, 60*D2R, -30*D2R, 0; 
-        tar_q_left = inverseKinematics(r_des, C_des, q, 0.001);
-    }
-    
 
-    if(time < 5) // status = 0 
-    {   
-        q_left_cmd(0) = func_1_cos(time,0,tar_q_left(0),5);
-        q_left_cmd(1) = func_1_cos(time,0,tar_q_left(1),5);
-        q_left_cmd(2) = func_1_cos(time,0,tar_q_left(2),5);
-        q_left_cmd(3) = func_1_cos(time,0,tar_q_left(3),5);
-        q_left_cmd(4) = func_1_cos(time,0,tar_q_left(4),5);
-        q_left_cmd(5) = func_1_cos(time,0,tar_q_left(5),5);   
-    }
     
-    else if(status >=1 && !status_1_check && time >= 5)
+    // 5 sec Walk Ready 
+    if(time <5)
     {
-        q = tar_q_left;
-        r_des << 0, 0.105, -0.35;
-        tar_q_left = inverseKinematics(r_des, C_des, q, 0.001);
-        status_1_check = true;
-        status = 2;
-        // status = 3;
-    }
-    else if(status >= 1  && time <= 10)
-    {
+        for(int i=0; i<6; i++)
+        {
+            q_left_cmd(i) = func_1_cos(time, 0, tar_q_left(i), 5);
+        }
+        for(int i=0; i<6; i++)
+        {
+            q_right_cmd(i) = func_1_cos(time, 0, tar_q_right(i), 5);
+        }
+        joint[LHY].targetRadian = q_left_cmd(0);
+        joint[LHR].targetRadian = q_left_cmd(1);
+        joint[LHP].targetRadian = q_left_cmd(2);
+        joint[LKN].targetRadian = q_left_cmd(3);
+        joint[LAP].targetRadian = q_left_cmd(4);
+        joint[LAR].targetRadian = q_left_cmd(5);    
+                
+        joint[RHY].targetRadian = q_right_cmd(0);
+        joint[RHR].targetRadian = q_right_cmd(1);
+        joint[RHP].targetRadian = q_right_cmd(2);
+        joint[RKN].targetRadian = q_right_cmd(3);
+        joint[RAP].targetRadian = q_right_cmd(4);
+        joint[RAR].targetRadian = q_right_cmd(5); 
+        cur_q_left = tar_q_left;
+        cur_q_right = tar_q_right;
+        std::cout << "status :: Walk Ready!!\n";
 
-        double time1 = time - 5;
-    
-        q_left_cmd(0) = func_1_cos(time1, q(0), tar_q_left(0), 5);
-        q_left_cmd(1) = func_1_cos(time1, q(1), tar_q_left(1), 5);
-        q_left_cmd(2) = func_1_cos(time1, q(2), tar_q_left(2), 5);
-        q_left_cmd(3) = func_1_cos(time1, q(3), tar_q_left(3), 5);
-        q_left_cmd(4) = func_1_cos(time1, q(4), tar_q_left(4), 5);
-        q_left_cmd(5) = func_1_cos(time1, q(5), tar_q_left(5), 5);
+
     }
     
-    else if (status == 2 && time <= 15 && !status_2_check)
-    {
-        q = tar_q_left;
-        r_des << 0, 0.105, -0.55;
-        tar_q_left = inverseKinematics(r_des, C_des, q, 0.001);
-        status_2_check = true;
-    }
-    else if (status == 3 && time <=15 && !status_3_check)
-    {
-        MatrixXd tmp;
-        double rot;
-        rot = 90*D2R;
-        q = tar_q_left;
-        r_des << 0, 0.105, -0.35;
-        tmp   <<   cos(rot), -sin(rot), 0,
-                   sin(rot),  cos(rot), 0,
-                             0,            0, 1;
-        C_des = tmp;
-        tar_q_left = inverseKinematics(r_des, C_des, q, 0.001);
-        status_3_check = true;
-    }
-    else if(status == 2 && time <= 15)
-    {   
-        double time2 = time - 10.0;
-        
-        q_left_cmd(0) = func_1_cos(time2,q(0),tar_q_left(0),5);
-        q_left_cmd(1) = func_1_cos(time2,q(1),tar_q_left(1),5);
-        q_left_cmd(2) = func_1_cos(time2,q(2),tar_q_left(2),5);
-        q_left_cmd(3) = func_1_cos(time2,q(3),tar_q_left(3),5);
-        q_left_cmd(4) = func_1_cos(time2,q(4),tar_q_left(4),5);
-        q_left_cmd(5) = func_1_cos(time2,q(5),tar_q_left(5),5);
-        
-    }
     
-    else if(status == 3 && time <= 15)
-    {
-        double time3 = time - 10.0;   
-        q_left_cmd(0) = func_1_cos(time3,q(0),tar_q_left(0),5);
-        q_left_cmd(1) = func_1_cos(time3,q(1),tar_q_left(1),5);
-        q_left_cmd(2) = func_1_cos(time3,q(2),tar_q_left(2),5);
-        q_left_cmd(3) = func_1_cos(time3,q(3),tar_q_left(3),5);
-        q_left_cmd(4) = func_1_cos(time3,q(4),tar_q_left(4),5);
-        q_left_cmd(5) = func_1_cos(time3,q(5),tar_q_left(5),5);
+    // right CoM
    
+    if (time >= 5 && 6.5 > time) {
+    
+    if(turn_Flag)
+    {
+        std::cout << "status :: Turning... right CoM\n";
+    }
+    else
+    {
+        std::cout<<"status ::  right CoM\n";
+    }
+    r_left_des(1) = func_1_cos(time - 5.0, 0.105, 0.210, 1.5);
+    r_right_des(1) = func_1_cos(time - 5.0, -0.105, 0, 1.5);
+
+    tar_q_left = inverseKinematics(r_left_des, C_left_des, cur_q_left, 0.001);
+    tar_q_right = inverseKinematics(r_right_des, C_right_des, cur_q_right, 0.001, "R");
+    
+    cur_q_left = tar_q_left;
+    cur_q_right = tar_q_right;
+    
+                
+    }
+    // left leg Up
+    else if (time >=6.5 and time < 8.5) {
+
+        if(turn_Flag)
+        {
+            turn_radian = func_1_cos(time-6.5, 0., 30*D2R, 2.0);                            
+            C_left_des << cos(turn_radian), -sin(turn_radian), 0,
+                          sin(turn_radian),  cos(turn_radian), 0,
+                                         0,                 0, 1;
+            std::cout <<"status :: Turning... Left leg up\n";
+        }
+        else
+        {   
+            r_left_des(0) = func_1_cos(time-6.5, 0.0, 0.1, 2.0);
+            std::cout<<"status :: left leg up\n";
+        }
+        
+        r_left_des(2) = func_1_cos(time-6.5, -0.75, -0.55, 2.0);
+
+        
+
+        tar_q_left = inverseKinematics(r_left_des, C_left_des, cur_q_left, 0.001);
+        tar_q_right = inverseKinematics(r_right_des, C_right_des, cur_q_right, 0.001,"R");
+
+        cur_q_left = tar_q_left;
+        cur_q_right = tar_q_right;
+        
+    
+    }    
+    //left leg Down
+    else if (time >= 8.5 and 10.5 > time) {
+
+        if(!turn_Flag)
+        {
+            r_left_des(0) = func_1_cos(time-8.5, 0.1, 0.2, 2.0);
+            std::cout<<"status :: left leg down\n";
+        }
+
+        else
+        {
+            
+            std::cout << "status :: Turning... left leg down\n";
+        }
+        r_left_des(2) = func_1_cos(time-8.5, -0.55, -0.75, 2.0);
+        
+        tar_q_left = inverseKinematics(r_left_des, C_left_des, cur_q_left, 0.001);
+        tar_q_right = inverseKinematics(r_right_des, C_right_des, cur_q_right, 0.001,"R");
+
+        cur_q_left = tar_q_left;
+        cur_q_right = tar_q_right;
+
+    }        
+    
+    // front_left leg CoM
+    else if (time >=10.5 && 12.5 > time) {
+        if(!turn_Flag)
+        {
+            r_left_des(0) = func_1_cos(time-10.5, 0.2, 0, 2.0);
+            r_left_des(1) = func_1_cos(time-10.5, 0.210, 0, 2.0);
+            
+            r_right_des(0) = func_1_cos(time-10.5, 0.0, -0.2, 2.0);
+            r_right_des(1) = func_1_cos(time-10.5, 0.0, -0.210, 2.0);
+            std::cout<<"status :: left leg CoM\n";
+        }
+        else
+        {
+            r_left_des(1) = func_1_cos(time-10.5, 0.210, 0, 2.0);
+
+            r_right_des(1) = func_1_cos(time-10.5, 0.0, -0.210, 2.0);
+            
+            std::cout<<"status :: Turning... left Leg CoM\n";
+        }
+        
+
+        tar_q_left = inverseKinematics(r_left_des, C_left_des, cur_q_left, 0.001);
+        tar_q_right = inverseKinematics(r_right_des, C_right_des, cur_q_right, 0.001,"R");
+
+        cur_q_left = tar_q_left;
+        cur_q_right = tar_q_right;
+        
+    }        
+    
+    else if (time >= 12.5 && 14.5 > time) {
+        //right leg up
+        if(turn_Flag)
+        {
+            r_left_des(1) = func_1_cos(time-12.5, 0, 0.02, 2.0);
+            r_right_des(2) = func_1_cos(time-12.5, 0 , -0.21,2.0);
+            
+            turn_radian = func_1_cos(time-12.5, 30*D2R, 0, 2.0);                            
+            C_left_des << cos(turn_radian), -sin(turn_radian), 0,
+                          sin(turn_radian),  cos(turn_radian), 0,
+                                         0,                 0, 1;
+            std::cout<< "status :: Turning... right leg up\n";
+        }
+        else
+        {   
+            r_right_des(0) = func_1_cos(time-12.5, -0.2, -0.1, 2.0);
+            std::cout<< "status :: right leg up\n";
+        }
+        
+        r_right_des(2) = func_1_cos(time-12.5, -0.75, -0.65,2.0);
+
+        tar_q_left = inverseKinematics(r_left_des, C_left_des, cur_q_left, 0.001);
+        tar_q_right = inverseKinematics(r_right_des, C_right_des, cur_q_right, 0.001,"R");
+
+        cur_q_left = tar_q_left;
+        cur_q_right = tar_q_right;     
+        
+
+    }            
+    else if (time >= 14.5 && 16.5 > time) {
+        //right leg down
+        if(!turn_Flag)
+        {
+            r_right_des(0) = func_1_cos(time-14.5, -0.1, 0.0, 2.0);
+            std::cout << "status :: rihgt leg down\n";
+        }
+        else
+        {
+            
+            std::cout << "status :: Turning... right leg down\n";
+        }
+
+        r_right_des(2) = func_1_cos(time-14.5, -0.65, -0.75, 2.0);
+        
+        tar_q_left = inverseKinematics(r_left_des, C_left_des, cur_q_left, 0.001);
+        tar_q_right = inverseKinematics(r_right_des, C_right_des, cur_q_right, 0.001,"R");
+
+        cur_q_left = tar_q_left;
+        cur_q_right = tar_q_right;   
+        
+    }                
+
+    else if (time >= 16.5 && 18.5 > time) {
+
+        if(turn_Flag)
+        {
+            r_left_des(1) = func_1_cos(time-16.5, 0.02, 0.105, 2.0);
+            r_right_des(1) = func_1_cos(time-16.5, -0.21, -0.105, 2.0);
+            std::cout << "status :: Turning... start CoM\n";
+        }
+        else
+        {
+            r_left_des(1) = func_1_cos(time-16.5, 0, 0.105, 2.0);
+            r_right_des(1) = func_1_cos(time-16.5, -0.210, -0.105, 2.0);
+            std::cout << "status :: start CoM\n";
+        }
+        
+
+        tar_q_left = inverseKinematics(r_left_des, C_left_des, cur_q_left, 0.001);
+        tar_q_right = inverseKinematics(r_right_des, C_right_des, cur_q_right, 0.001,"R");
+
+        cur_q_left = tar_q_left;
+        cur_q_right = tar_q_right;     
+        
+    } 
+    
+    else if (time >= 18.5 && 20.5 > time) {
+
+        if(turn_Flag && !turn_finish)
+        {
+            turn_count++;
+            time = 5.0;
+            if(turn_count >2)
+            {
+                turn_finish = true;
+                turn_Flag = false;
+                time =5.0;
+            }
+        }
+        else if(step_count < 2 && !turn_finish) 
+        {
+            time = 5.0;
+            step_count++;
+        }
+        else if(step_count>= 2 && !turn_finish) 
+        {
+            step_count = 0;
+            turn_Flag = true;
+            time = 5.0;
+        }
+
+        else if (step_count < 1 && turn_finish)
+        {
+            step_count++;
+            time = 5.0;
+        }
+        else if(step_count >=1 && turn_finish)
+        {
+            time = 25.0;
+        }
+        
+        
+       
+    }
+    else if(time>=25.0)
+    {
+        cout << "status :: finish\n";
     }
     
-//    std::cout << "status : " << status << "\n";
-   for(int i=0; i<6; i++)
-   {
-       std::cout << "q_left_cmd(" << i << ") = " << q_left_cmd(i) << '\n';
-    //    std::cout << "tar_q_left(" << i << "::::: " << tar_q_left(i) << '\n';
-   }
     
-    joint[LHY].targetRadian = q_left_cmd(0);
-    joint[LHR].targetRadian = q_left_cmd(1);
-    joint[LHP].targetRadian = q_left_cmd(2);
-    joint[LKN].targetRadian = q_left_cmd(3);
-    joint[LAP].targetRadian = q_left_cmd(4);
-    joint[LAR].targetRadian = q_left_cmd(5);
+    if(time>=5)
+    {
+        joint[LHY].targetRadian = tar_q_left(0);
+        joint[LHR].targetRadian = tar_q_left(1);
+        joint[LHP].targetRadian = tar_q_left(2);
+        joint[LKN].targetRadian = tar_q_left(3);
+        joint[LAP].targetRadian = tar_q_left(4);
+        joint[LAR].targetRadian = tar_q_left(5);    
+                
+        joint[RHY].targetRadian = tar_q_right(0);
+        joint[RHR].targetRadian = tar_q_right(1);
+        joint[RHP].targetRadian = tar_q_right(2);
+        joint[RKN].targetRadian = tar_q_right(3);
+        joint[RAP].targetRadian = tar_q_right(4);
+        joint[RAR].targetRadian = tar_q_right(5); 
+    }
+    
     
     
     jointController();
@@ -1004,12 +1191,15 @@ void gazebo::rok3_plugin::SetJointPIDgain()
     /*
      * Set each joint PID gain for joint control
      */
-    joint[LHY].Kp = 2000;
-    joint[LHR].Kp = 9000;
-    joint[LHP].Kp = 2000;
-    joint[LKN].Kp = 5000;
-    joint[LAP].Kp = 3000;
-    joint[LAR].Kp = 3000;
+    double gain_p = 2.0;
+    double gain_d = 2.0;
+
+    joint[LHY].Kp = 2000 * gain_p ;
+    joint[LHR].Kp = 9000 * gain_p ;
+    joint[LHP].Kp = 2000 * gain_p ;
+    joint[LKN].Kp = 5000 * gain_p ;
+    joint[LAP].Kp = 3000 * gain_p ;
+    joint[LAR].Kp = 3000 * gain_p ;
 
     joint[RHY].Kp = joint[LHY].Kp;
     joint[RHR].Kp = joint[LHR].Kp;
@@ -1018,14 +1208,14 @@ void gazebo::rok3_plugin::SetJointPIDgain()
     joint[RAP].Kp = joint[LAP].Kp;
     joint[RAR].Kp = joint[LAR].Kp;
 
-    joint[WST].Kp = 2.;
+    joint[WST].Kp = 2. * gain_p ;
 
-    joint[LHY].Kd = 2.;
-    joint[LHR].Kd = 2.;
-    joint[LHP].Kd = 2.;
-    joint[LKN].Kd = 4.;
-    joint[LAP].Kd = 2.;
-    joint[LAR].Kd = 2.;
+    joint[LHY].Kd = 2. * gain_d ;
+    joint[LHR].Kd = 2. * gain_d ;
+    joint[LHP].Kd = 2. * gain_d ;
+    joint[LKN].Kd = 4. * gain_d ;
+    joint[LAP].Kd = 2. * gain_d ;
+    joint[LAR].Kd = 2. * gain_d ;
 
     joint[RHY].Kd = joint[LHY].Kd;
     joint[RHR].Kd = joint[LHR].Kd;
